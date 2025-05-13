@@ -16,52 +16,59 @@ function getTodayUTCDate() {
 
 const yesterday = getYesterdayUTCDate();
 const today = getTodayUTCDate();
+const cacheKey = "modified-" + yesterday;
 
-// همیشه از API داده‌ها را دریافت می‌کنیم، بدون استفاده از کش
-fetch(`https://api.twelvedata.com/time_series?symbol=${symbol}&interval=1day&apikey=${apiKey}&start_date=${yesterday} 00:00:00&end_date=${yesterday} 23:59:00`)
-  .then(res => res.json())
-  .then(data => {
-    const values = data.values[0];
-    const high = parseFloat(values.high);
-    const low = parseFloat(values.low);
-    const close = parseFloat(values.close);
-    const open = parseFloat(values.open);
+// بررسی تاریخ کش
+const cached = localStorage.getItem(cacheKey);
+const cachedDate = cached ? cached.split('<td>')[1].split('</td>')[0] : ""; // استخراج تاریخ کش از داده‌های HTML ذخیره‌شده
 
-    const pivot = (high + low + close + open) / 4;
-    const R1 = (2 * pivot) - low;
-    const R2 = pivot + (high - low);
-    const R3 = high + 2 * (pivot - low);
-    const S1 = (2 * pivot) - high;
-    const S2 = pivot - (high - low);
-    const S3 = low - 2 * (high - pivot);
+if (cached && cachedDate === yesterday) {
+  // اگر تاریخ کش برابر با تاریخ دیروز باشد، از کش استفاده می‌کنیم
+  document.getElementById("modified-results").innerHTML = cached;
+} else {
+  // در غیر این صورت درخواست API برای داده‌های روز دیروز
+  fetch(`https://api.twelvedata.com/time_series?symbol=${symbol}&interval=1day&apikey=${apiKey}&start_date=${yesterday} 00:00:00&end_date=${yesterday} 23:59:00`)
+    .then(res => res.json())
+    .then(data => {
+      const values = data.values[0];
+      const high = parseFloat(values.high);
+      const low = parseFloat(values.low);
+      const close = parseFloat(values.close);
+      const open = parseFloat(values.open);
 
-    const resultTable = `
-      <table>
-        <tr><th>Date (UTC)</th><th>Pivot</th><th>R1</th><th>R2</th><th>R3</th><th>S1</th><th>S2</th><th>S3</th></tr>
-        <tr>
-          <td>${yesterday}</td>
-          <td>${pivot.toFixed(2)}</td>
-          <td>${R1.toFixed(2)}</td>
-          <td>${R2.toFixed(2)}</td>
-          <td>${R3.toFixed(2)}</td>
-          <td>${S1.toFixed(2)}</td>
-          <td>${S2.toFixed(2)}</td>
-          <td>${S3.toFixed(2)}</td>
-        </tr>
-      </table>
-    `;
+      const pivot = (high + low + close + open) / 4;
+      const R1 = (2 * pivot) - low;
+      const R2 = pivot + (high - low);
+      const R3 = high + 2 * (pivot - low);
+      const S1 = (2 * pivot) - high;
+      const S2 = pivot - (high - low);
+      const S3 = low - 2 * (high - pivot);
 
-    document.getElementById("modified-results").innerHTML = resultTable;
+      const resultTable = `
+        <table>
+          <tr><th>Date (UTC)</th><th>Pivot</th><th>R1</th><th>R2</th><th>R3</th><th>S1</th><th>S2</th><th>S3</th></tr>
+          <tr>
+            <td>${yesterday}</td>
+            <td>${pivot.toFixed(2)}</td>
+            <td>${R1.toFixed(2)}</td>
+            <td>${R2.toFixed(2)}</td>
+            <td>${R3.toFixed(2)}</td>
+            <td>${S1.toFixed(2)}</td>
+            <td>${S2.toFixed(2)}</td>
+            <td>${S3.toFixed(2)}</td>
+          </tr>
+        </table>
+      `;
 
-    // ذخیره داده‌ها در کش برای استفاده در آینده (اگر لازم باشد)
-    // localStorage.setItem(cacheKey, resultTable); // این خط دیگر نیازی نیست اگر کش نمی‌خواهید
+      document.getElementById("modified-results").innerHTML = resultTable;
+      localStorage.setItem(cacheKey, resultTable); // ذخیره داده‌ها در کش
 
-    // ذخیره تاریخ‌های پیوت در تاریخچه
-    const history = JSON.parse(localStorage.getItem('pivotHistory')) || [];
-    history.unshift({
-      date: yesterday, R1: R1.toFixed(2), R2: R2.toFixed(2), R3: R3.toFixed(2),
-      S1: S1.toFixed(2), S2: S2.toFixed(2), S3: S3.toFixed(2)
-    });
-    localStorage.setItem('pivotHistory', JSON.stringify(history.slice(0, 30)));
-  })
-  .catch(err => console.error("API error:", err));
+      const history = JSON.parse(localStorage.getItem('pivotHistory')) || [];
+      history.unshift({
+        date: yesterday, R1: R1.toFixed(2), R2: R2.toFixed(2), R3: R3.toFixed(2),
+        S1: S1.toFixed(2), S2: S2.toFixed(2), S3: S3.toFixed(2)
+      });
+      localStorage.setItem('pivotHistory', JSON.stringify(history.slice(0, 30)));
+    })
+    .catch(err => console.error("API error:", err));
+}
